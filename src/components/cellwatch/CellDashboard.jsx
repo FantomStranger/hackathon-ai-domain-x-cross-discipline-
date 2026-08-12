@@ -9,11 +9,18 @@ import WaveformChart from "./WaveformChart";
 import PerCycleSparklines from "./PerCycleSparklines";
 import AssumptionsDisclaimer from "./AssumptionsDisclaimer";
 
-export default function CellDashboard({ battery, prediction }) {
+export default function CellDashboard({ battery = {}, prediction = {} }) {
   const [cycles, setCycles] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // If no battery ID is provided yet, skip fetching and stop loader
+    if (!battery?.id) {
+      setCycles([]);
+      setLoading(false);
+      return;
+    }
+
     let alive = true;
     (async () => {
       setLoading(true);
@@ -26,20 +33,30 @@ export default function CellDashboard({ battery, prediction }) {
       if (alive) setLoading(false);
     })();
     return () => { alive = false; };
-  }, [battery.id]);
+  }, [battery?.id]);
 
-  const refLife = battery.reference_cycle_life || CHEMISTRIES[battery.chemistry]?.refCycles || "—";
+  // Safe property fallbacks to avoid undefined/NaN errors
+  const batteryName = battery.name || "Synthetic Cell Profile";
+  const batteryId = battery.id || "syn-000000";
+  const chemistry = battery.chemistry || "LFP";
+  const capacityAh = battery.capacity_ah || 50;
+  const currentSoH = battery.current_soh ?? 100;
+  const cycleCount = battery.cycle_count ?? 0;
+  const batteryStatus = battery.status || "healthy";
+  const nominalVoltage = battery.nominal_voltage || 3.2;
+
+  const refLife = battery.reference_cycle_life || CHEMISTRIES[chemistry]?.refCycles || "—";
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-6 py-3.5 border-b border-border">
         <div className="flex items-center gap-3 min-w-0">
           <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground shrink-0">Selected Cell</span>
-          <span className="font-mono text-sm text-foreground truncate">{battery.name}</span>
+          <span className="font-mono text-sm text-foreground truncate">{batteryName}</span>
           <span className="text-muted-foreground">·</span>
-          <span className="text-xs text-muted-foreground font-mono">{battery.id.slice(-6)}</span>
+          <span className="text-xs text-muted-foreground font-mono">{batteryId.slice(-6)}</span>
           <span className="text-muted-foreground hidden sm:inline">·</span>
-          <span className="text-xs text-muted-foreground hidden sm:inline">{battery.chemistry} · {battery.capacity_ah}Ah</span>
+          <span className="text-xs text-muted-foreground hidden sm:inline">{chemistry} · {capacityAh}Ah</span>
         </div>
         <div className="text-xs text-muted-foreground font-mono shrink-0">reference cycle-life · {refLife}</div>
       </div>
@@ -50,14 +67,22 @@ export default function CellDashboard({ battery, prediction }) {
         ) : (
           <>
             <div className="grid lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-1"><SystemHealthCard status={battery.status} /></div>
-              <div className="lg:col-span-2"><MetricsGrid prediction={prediction} soh={battery.current_soh} cycleCount={battery.cycle_count} /></div>
+              <div className="lg:col-span-1">
+                <SystemHealthCard status={batteryStatus} />
+              </div>
+              <div className="lg:col-span-2">
+                <MetricsGrid prediction={prediction} soh={currentSoH} cycleCount={cycleCount} />
+              </div>
             </div>
             <div className="grid lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-2"><SoHForecastChart cycles={cycles} prediction={prediction} /></div>
-              <div className="lg:col-span-1"><DriverPanel cycles={cycles} capacity={battery.capacity_ah} /></div>
+              <div className="lg:col-span-2">
+                <SoHForecastChart cycles={cycles} prediction={prediction} />
+              </div>
+              <div className="lg:col-span-1">
+                <DriverPanel cycles={cycles} capacity={capacityAh} />
+              </div>
             </div>
-            <WaveformChart cycle={cycles[cycles.length - 1]} nominal={battery.nominal_voltage} />
+            <WaveformChart cycle={cycles[cycles.length - 1]} nominal={nominalVoltage} />
             <PerCycleSparklines cycles={cycles} />
             <AssumptionsDisclaimer />
             <div className="text-center text-[10px] font-mono text-muted-foreground pt-2">
